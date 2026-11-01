@@ -9,10 +9,19 @@ A native, remote-friendly Android TV catalog of videos repeatedly recommended on
 - Predictable Back-to-menu navigation and focus restoration after details, pagination and configuration changes.
 - Device-local saved videos.
 - Recommendation evidence: author, month, quote and link to the original HN comment.
-- Playback handoff to the official YouTube TV app; a clear error if it is unavailable (no browser fallback).
+- **In-app video playback** through YouTube's official embedded player, with remote play/pause, ±10-second seeking and full-screen cinema mode.
+- Back returns to video details; playback stops when you leave the app. No external app/browser fallback.
 - Offline catalog browsing; thumbnails and playback require internet.
 
-**This is a curated launcher, not an isolated YouTube player.** Once in YouTube, its recommendations, ads, availability and account settings apply. Some archived videos may be unavailable. Return behavior depends on the installed YouTube version. No scraping, stream extraction or ad bypass.
+Playback stays in HackerTube, using Android System WebView and YouTube's IFrame API—not the separate YouTube TV app. YouTube still controls its embedded UI, related-video suggestions, ads, captions, availability and playback restrictions. Videos that disallow embedding cannot play here; errors stay in the app. No scraping, stream extraction, player masking or ad bypass.
+
+### Player remote controls
+- **Watch** on a video detail page starts in-app playback.
+- The native toolbar provides **Play/Pause**, **−10 sec**, **+10 sec**, **YouTube controls**, and **Cinema**.
+- In **Cinema**, center plays/pauses, left/right seek 10 seconds, and down restores the toolbar. Native controls sit outside the YouTube viewport, never over it.
+- **YouTube controls** gives focus to the original player UI for captions/settings. Back returns to native controls; otherwise Back returns to video details.
+- Dedicated remote media keys work too. Leaving for Home pauses and destroys the player; returning reloads near the last observed position without autoplay. Persistent watch-history syncing is not implemented.
+- A current Android System WebView is required. The standalone YouTube TV app is not required.
 
 ## Data and selection
 Source: [HackerTube public export](https://hackertube.org/data), dated 2026-10-31. We reuse its video and labeled-comment exports, rather than scrape HN again. See [upstream documentation](docs/DATA.md) and [attribution](NOTICE.md).
@@ -60,14 +69,19 @@ Disable debugging when finished. Don't expose ADB to the internet. On this devel
 - Thirteen Python tests cover recommendation filtering, bundled catalog invariants and TV manifest/launcher assets.
 - Android debug compilation and lint pass (non-blocking English-only UI, TV orientation and monochrome-icon warnings).
 - Automated Android 14 Google TV D-pad regression checks cover browsing, source dialogs, saved/empty states, search, pagination, topics, focus restoration, 130% text and Back-to-Home.
-- Official YouTube TV activity launch was smoke-tested in the first version. Real-TV installation and actual video playback still require device testing.
+- Seven Node tests cover the embedded adapter's initialization, identity, play/pause, seek bounds, lifecycle and error reporting.
+- Live emulator playback confirmed actual advancing video time, pause/resume, seeking, cinema controls, stopping on Home, and returning to details without leaving HackerTube.
+- Physical-TV playback, TalkBack and every YouTube restriction/error scenario still require device testing.
 
 Run UI checks on a disposable emulator (clears only that emulator's app data):
 ```sh
 python3 scripts/smoke_tv.py --serial emulator-5554
+node --test scripts/test_player.mjs
+# Live network-dependent playback test (not run in CI):
+python3 scripts/smoke_player.py --serial emulator-5554
 ```
 
-See [official-guideline research and applied changes](docs/TV_DESIGN_REVIEW.md), including deferred Compose migration, accessibility validation limits and screenshots.
+See [official-guideline research and applied changes](docs/TV_DESIGN_REVIEW.md) and [embedded player design and testing](docs/EMBEDDED_PLAYER.md).
 
 ## Privacy / limitations
-No analytics, accounts, backend, or secrets. Saved IDs stay in app preferences and are removed on uninstall. Thumbnail requests go to YouTube. HN source URLs are displayed for reading on another device; the app never launches a web browser. Catalog updates require rebuilding. UI is English-only. No watch-progress syncing or embedded playback.
+HackerTube has no first-party analytics, accounts, backend, or secrets. Saved IDs stay in app preferences and are removed on uninstall. Thumbnails and playback contact YouTube. The embedded player uses WebView storage/cookies and may use WebView Media Integrity attestation (app metadata and a device token); YouTube's own policies apply. It does not inherit login/Premium state from the YouTube TV app. HN source URLs are displayed for reading on another device; the app never launches a web browser. Catalog updates require rebuilding. UI is English-only. No persistent watch-progress syncing.

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>HackerTube player</title>
+<style>html,body,#player{margin:0;width:100%;height:100%;background:#000;overflow:hidden}iframe{border:0;display:block}</style>
+</head>
+<body>
+<div id="player"></div>
+<script>
+'use strict';
+// Substitutions are JSON literals, never raw user-provided HTML.
+const videoId = __VIDEO_ID__;
+const appOrigin = __APP_ORIGIN__;
+const autoStart = __AUTO_START__;
+const startSeconds = __START_SECONDS__;
+let player;
+let foreground = true;
+window.htStatus = {ready:false,state:-1,error:0,blocked:false,time:0,duration:0};
+window.onYouTubeIframeAPIReady = function () {
+  player = new YT.Player('player', {
+    width:'100%', height:'100%', videoId,
+    host:'https://www.youtube-nocookie.com',
+    playerVars:{origin:appOrigin,autoplay:0,controls:1,playsinline:1,fs:0,rel:0,start:startSeconds},
+    events:{
+      onReady:function () {
+        htStatus.ready = true;
+        // The Activity is entered only after an explicit Watch selection.
+        if (foreground && autoStart) player.playVideo();
+      },
+      onStateChange:function (event) {
+        htStatus.state = event.data;
+        if (event.data === 1) {
+          htStatus.blocked = false;
+          if (!foreground) player.pauseVideo();
+        }
+      },
+      onError:function (event) { htStatus.error = event.data; },
+      onAutoplayBlocked:function () { htStatus.blocked = true; }
+    }
+  });
+};
+window.htCommand = function (command) {
+  if (command === 'background') foreground = false;
+  if (command === 'foreground') foreground = true;
+  if (!player || !htStatus.ready) return;
+  switch (command) {
+    case 'toggle': player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo(); break;
+    case 'play': player.playVideo(); break;
+    case 'pause': case 'background': player.pauseVideo(); break;
+    case 'rewind': player.seekTo(Math.max(0, player.getCurrentTime()-10), true); break;
+    case 'forward': player.seekTo(Math.min(player.getDuration(), player.getCurrentTime()+10), true); break;
+    case 'focus': document.getElementById('player').focus(); break;
+  }
+};
+window.htSnapshot = function () {
+  if (player && htStatus.ready) {
+    htStatus.time = player.getCurrentTime() || 0;
+    htStatus.duration = player.getDuration() || 0;
+  }
+  return htStatus;
+};
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

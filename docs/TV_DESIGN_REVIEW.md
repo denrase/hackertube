@@ -2,6 +2,8 @@
 
 Research and application: 2026-11-01. App revision: 0.2.0.
 
+**Historical review:** v0.3.0 replaces the delegated YouTube TV playback described below with an official in-app embed. Playback, MediaSession and ambient-mode statements below are superseded by [the embedded-player design](EMBEDDED_PLAYER.md); catalog/UI findings still apply.
+
 This is a review against official Android documentation, **not Play Store certification**. Google TV applications run on Android TV OS, so these are the applicable design and quality guides.
 
 ## Sources and applied decisions

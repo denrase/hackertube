@@ -58,7 +58,7 @@ try:
     expect_focus('Open video details')
     first = focused().get('content-desc')
     keys(23)
-    expect_focus('Watch on YouTube')
+    expect_focus('Watch')
     assert not any(n.get('text') == 'Back' for n in tree().iter('node')), 'Soft Back button should not be present'
     keys(22, 23)
     expect_focus('Unsave')
@@ -75,7 +75,7 @@ try:
     keys(22, 23)
     expect_focus('Saved')
     keys(20, 23)
-    expect_focus('Watch on YouTube')
+    expect_focus('Watch')
     keys(22, 23)
     expect_focus('Save for later')
     keys(4)
@@ -128,7 +128,7 @@ try:
     assert focused().get('content-desc') == before_recreate, 'Configuration change lost focused video'
     screenshot('google-tv-large-text.png')
     keys(23)
-    expect_focus('Watch on YouTube')
+    expect_focus('Watch')
     screenshot('google-tv-details-large-text.png')
     keys(4, 4)
     expect_focus('Discover')
