@@ -1,6 +1,9 @@
 <resources>
  <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
   <item name="android:colorAccent">#FF7730</item>
+  <item name="android:colorPrimary">#0E1117</item>
+  <item name="android:windowAllowReturnTransitionOverlap">true</item>
+  <item name="android:windowAllowEnterTransitionOverlap">true</item>
   <item name="android:windowBackground">#0E1117</item>
   <item name="android:colorBackground">#1B202A</item>
   <item name="android:windowActionModeOverlay">true</item>

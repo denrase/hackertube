@@ -4,10 +4,12 @@ A native, remote-friendly Android TV catalog of videos repeatedly recommended on
 
 ## Included
 - 2,074 curated videos, bundled locally; no backend or API key required.
-- D-pad navigation, orange focus rings, search, topic filtering and paginated browsing.
+- D-pad navigation, orange focus rings, selected tabs, search, topic filtering and paginated browsing.
+- TV-safe margins, proportional thumbnails and flexible cards tested at 130% system text size.
+- Predictable Back-to-menu navigation and focus restoration after details, pagination and configuration changes.
 - Device-local saved videos.
 - Recommendation evidence: author, month, quote and link to the original HN comment.
-- Playback handoff to the official YouTube TV app, with a standard URL fallback.
+- Playback handoff to the official YouTube TV app; a clear error if it is unavailable (no browser fallback).
 - Offline catalog browsing; thumbnails and playback require internet.
 
 **This is a curated launcher, not an isolated YouTube player.** Once in YouTube, its recommendations, ads, availability and account settings apply. Some archived videos may be unavailable. Return behavior depends on the installed YouTube version. No scraping, stream extraction or ad bypass.
@@ -55,10 +57,17 @@ scripts/install-tv.sh TV_IP:DEBUG_PORT
 Disable debugging when finished. Don't expose ADB to the internet. On this development Mac, platform-tools 37 crashed with mDNS enabled; `export ADB_MDNS=0` fixes explicit-address connections.
 
 ## Validation
-- Eight Python tests cover recommendation filtering and all bundled catalog invariants.
-- Android debug compilation and lint pass (non-blocking English-only UI, banner size and TV orientation warnings).
-- Manually smoke-tested on the Android 14 Google TV ARM64 emulator: catalog rendering, D-pad detail navigation, saved preference persistence, and launch of the official YouTube TV activity.
-- Real-TV installation and real video playback still require device testing.
+- Thirteen Python tests cover recommendation filtering, bundled catalog invariants and TV manifest/launcher assets.
+- Android debug compilation and lint pass (non-blocking English-only UI, TV orientation and monochrome-icon warnings).
+- Automated Android 14 Google TV D-pad regression checks cover browsing, source dialogs, saved/empty states, search, pagination, topics, focus restoration, 130% text and Back-to-Home.
+- Official YouTube TV activity launch was smoke-tested in the first version. Real-TV installation and actual video playback still require device testing.
+
+Run UI checks on a disposable emulator (clears only that emulator's app data):
+```sh
+python3 scripts/smoke_tv.py --serial emulator-5554
+```
+
+See [official-guideline research and applied changes](docs/TV_DESIGN_REVIEW.md), including deferred Compose migration, accessibility validation limits and screenshots.
 
 ## Privacy / limitations
-No analytics, accounts, backend, or secrets. Saved IDs stay in app preferences and are removed on uninstall. Thumbnail requests go to YouTube. HN links open a browser if installed; otherwise the URL is displayed. Catalog updates require rebuilding. UI is English-only. No watch-progress syncing or embedded playback.
+No analytics, accounts, backend, or secrets. Saved IDs stay in app preferences and are removed on uninstall. Thumbnail requests go to YouTube. HN source URLs are displayed for reading on another device; the app never launches a web browser. Catalog updates require rebuilding. UI is English-only. No watch-progress syncing or embedded playback.
