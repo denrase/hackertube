@@ -1,6 +1,7 @@
 package app.hackertube.tv;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.media.MediaMetadata;
@@ -28,6 +29,7 @@ import android.widget.LinearLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.TextView;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONTokener;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -41,7 +43,10 @@ public final class PlayerActivity extends Activity {
     private LinearLayout root, controls, footer;
     private FrameLayout viewport;
     private TextView heading, status;
-    private Button toggle, retry;
+    private Button toggle, retry, subtitles;
+    private JSONObject captions = new JSONObject();
+    private long cachedDuration;
+    private boolean choosingSubtitles;
     private String videoId, videoTitle, nativeError = "";
     private boolean active, ready, cinema, iframeControls, autoStart = true;
     private double position, duration;
@@ -65,6 +70,12 @@ public final class PlayerActivity extends Activity {
                         playerState = data.optInt("state", -1);
                         if (ready && playerState != -1 && playerState != 5) position = data.optDouble("time", position);
                         duration = data.optDouble("duration", duration);
+                        if (ready && duration > 0 && Math.round(duration) != cachedDuration) {
+                            cachedDuration = Math.round(duration); DurationMetadata.recordPlayback(PlayerActivity.this, videoId, duration);
+                        }
+                        JSONObject availableCaptions = data.optJSONObject("captions");
+                        if (availableCaptions != null) captions = availableCaptions;
+                        subtitles.setText(captions.optBoolean("supported") ? "Subtitles: " + (captions.optString("current").isEmpty() ? "Off" : captions.optString("current")) : "Subtitles");
                         int error = data.optInt("error");
                         keepAwake(ready && error == 0 && (playerState == 1 || playerState == 3));
                         toggle.setText(playerState == 1 ? "Pause" : "Play");
@@ -129,6 +140,7 @@ public final class PlayerActivity extends Activity {
         status.setMaxLines(3);
         footer.addView(status);
         controls = new LinearLayout(this);
+        controls.setId(R.id.player_controls);
         HorizontalScrollView controlScroll = new HorizontalScrollView(this);
         controlScroll.setHorizontalScrollBarEnabled(false);
         controlScroll.addView(controls);
@@ -136,19 +148,50 @@ public final class PlayerActivity extends Activity {
         toggle = button("Play", () -> command("toggle"));
         button("−10 sec", () -> command("rewind"));
         button("+10 sec", () -> command("forward"));
-        button("YouTube controls", () -> {
-            if (web == null) return;
-            iframeControls = true;
-            web.setFocusable(true);
-            web.requestFocus();
-            command("focus");
-            showStatus("YouTube controls: use the D-pad. Back returns to HackerTube controls.");
-        });
+        subtitles = button("Subtitles", this::chooseSubtitles);
+        button("YouTube controls", this::focusYouTubeControls);
         button("Cinema", () -> { cinema = true; applyCinema(); if (web != null) web.requestFocus(); });
         retry = button("Retry", () -> { destroyPlayer(); nativeError = ""; autoStart = true; createPlayer(); startPolling(); });
         retry.setVisibility(View.GONE);
         applyCinema();
         toggle.requestFocus();
+    }
+
+    private void focusYouTubeControls() {
+        if (web == null) return;
+        iframeControls = true; web.setFocusable(true); web.requestFocus(); command("focus");
+        showStatus("YouTube controls: use the D-pad. Back returns to HackerTube controls.");
+    }
+
+    private void chooseSubtitles() {
+        if (web == null || choosingSubtitles) return;
+        WebView original = web;
+        boolean resume = playerState == 1;
+        command("pause"); choosingSubtitles = true;
+        // A separate native selection screen: never overlay controls on a visible YouTube player.
+        original.setVisibility(View.INVISIBLE);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this).setTitle("Subtitles");
+        JSONArray tracks = captions.optJSONArray("tracks");
+        if (!captions.optBoolean("supported") || tracks == null || tracks.length() == 0) {
+            builder.setMessage("YouTube has not exposed subtitle tracks for this video. Try its original CC/settings controls.")
+                .setPositiveButton("YouTube controls", (d,which) -> handler.post(this::focusYouTubeControls));
+        } else {
+            String[] labels = new String[tracks.length()+1]; labels[0] = "Off"; int selected = 0;
+            for (int i=0;i<tracks.length();i++) {
+                JSONObject track=tracks.optJSONObject(i); labels[i+1]=track.optString("label",track.optString("code"));
+                if (track.optString("code").equals(captions.optString("current"))) selected=i+1;
+            }
+            builder.setSingleChoiceItems(labels,selected,(d,index)->{
+                if(web==original) original.evaluateJavascript("window.htSetCaptions && htSetCaptions("+(index-1)+")",null);
+                d.dismiss();
+            });
+        }
+        AlertDialog dialog=builder.create();
+        dialog.setOnDismissListener(d->{
+            choosingSubtitles=false;
+            if(web==original){original.setVisibility(View.VISIBLE);subtitles.requestFocus();if(resume&&active)command("play");}
+        });
+        dialog.show();
     }
 
     private Button button(String title, Runnable action) {
@@ -255,7 +298,7 @@ public final class PlayerActivity extends Activity {
     private void command(String name) {
         if (web == null) return;
         boolean starts = name.equals("play") || (name.equals("toggle") && playerState != 1);
-        if (starts && !active) return;
+        if (starts && (!active || choosingSubtitles)) return;
         web.evaluateJavascript("window.htCommand && htCommand(" + JSONObject.quote(name) + ")", null);
     }
     private void keepAwake(boolean playing) {

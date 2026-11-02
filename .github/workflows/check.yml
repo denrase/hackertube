@@ -18,7 +18,7 @@ jobs:
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
       - run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
       - run: node --test scripts/test_player.mjs
-      - run: ./gradlew assembleDebug lintDebug
+      - run: ./gradlew assembleDebug lintDebug testDebugUnitTest
       - uses: actions/upload-artifact@v4
         with:
           name: hackertube-debug

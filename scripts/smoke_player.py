@@ -32,9 +32,14 @@ def tree():
     return ET.fromstring(adb('shell','cat','/sdcard/ht-player-test.xml'))
 
 def focused_text():
-    nodes = [n for n in tree().iter('node') if n.get('focused')=='true']
+    root = tree()
+    nodes = [n for n in root.iter('node') if n.get('focused')=='true']
+    if any(n.get('class')=='android.widget.ListView' for n in nodes):
+        selected = [n for n in root.iter('node') if n.get('selected')=='true' and n.get('text')]
+        if selected: return selected[0].get('text')
     # Chromium can expose a DOM-focused node even when a native button owns input focus.
-    native = [n for n in nodes if n.get('class')=='android.widget.Button']
+    containers = [n for n in root.iter('node') if n.get('resource-id')==PKG+':id/player_controls']
+    native = [n for container in containers for n in container.iter('node') if n.get('focused')=='true']
     return (native or nodes)[0].get('text','') if nodes else ''
 
 def playback():
@@ -80,7 +85,33 @@ try:
 
     key(127) # Pause to keep UIAutomator's accessibility tree idle while finding controls.
     wait_state('PAUSED')
-    key(22,22,22,22)
+    key(22,22,22)
+    assert focused_text()=='Subtitles: Off', focused_text()
+    key(23)
+    for _ in range(50):
+        if focused_text()=='German': break
+        key(20)
+    assert focused_text()=='German', focused_text()
+    screenshot('google-tv-subtitle-picker.png')
+    key(23)
+    time.sleep(1)
+    assert focused_text()=='Subtitles: de', focused_text()
+    key(126)
+    wait_state('PLAYING')
+    time.sleep(3)
+    screenshot('google-tv-subtitles-german.png')
+    key(127)
+    wait_state('PAUSED')
+    key(23)
+    for _ in range(50):
+        if focused_text()=='Off': break
+        key(19)
+    assert focused_text()=='Off', focused_text()
+    key(23)
+    time.sleep(1)
+    assert focused_text()=='Subtitles: Off', focused_text()
+    print('PASS: subtitles start Off, German selection and explicit Off')
+    key(22,22)
     assert focused_text()=='Cinema', focused_text()
     key(23)
     key(23) # surface center plays

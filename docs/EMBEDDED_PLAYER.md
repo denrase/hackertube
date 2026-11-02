@@ -1,4 +1,4 @@
-# In-app playback (v0.3.0)
+# In-app playback (v0.4.0)
 
 The standalone YouTube TV handoff is replaced by a private `PlayerActivity` containing Android's OS WebView and the **official YouTube IFrame Player API**. Videos play inside HackerTube. No installed YouTube TV app is needed and there is no automatic external-app fallback.
 
@@ -21,12 +21,20 @@ The standalone YouTube TV handoff is replaced by a private `PlayerActivity` cont
 - On pause, the wrapper is told to pause. On stop, WebView is destroyed, ensuring playback cannot continue off-screen. Returning reloads near the last polled timestamp without autoplay. Configuration recreation uses saved position/cinema mode. Position is approximate and not persisted as watch history.
 - Handles missing WebView, render-process failure, load timeout, autoplay blocking, and YouTube error codes 2/5/100/101/150/153. Retry stays in the app. Explicit Watch is the only initial autoplay trigger.
 
+## Subtitles and duration metadata (v0.4)
+
+- Native **Subtitles** chooser defaults to Off for each newly created player. Available languages come from the embedded video's caption module, not a hardcoded language list. The player exposes `track` / `tracklist` through `getOptions('captions')`; these are capability-detected because the documented stable caption options are narrower and YouTube may change this surface. No caption files are scraped and no iframe DOM is accessed.
+- `cc_load_policy=1` initializes the captions module so its track list is available. The wrapper immediately applies an empty track (Off) on ready/module load, before its initial play request when possible. The selected track is reapplied on module reload. YouTube retains its last language object even when captions are disabled, so the toolbar reports HackerTube's selection, not that stale object. It does not track manual changes made later through YouTube's own controls.
+- The picker pauses playback and hides the video while the separate native selection UI is visible; it never overlays a visible YouTube player. Dismissing restores visibility and resumes only if it was playing beforehand. If module options aren't available, the original YouTube controls remain the fallback.
+- Cards and details show duration from `https://hackertube.org/api/docs?vids=...`. Only visible IDs are fetched in small batches; successful values are cached privately for up to 30 days. Failed/missing values show a dash on cards and “unavailable” in details. The catalog itself remains usable offline. No YouTube metadata is added to the redistributed dataset. The player's observed duration fills gaps without overwriting fresh source metadata.
+
 ## Validation
 
 - Actual 3Blue1Brown “Vectors” video played in the Android 14 Google TV ARM64 emulator. Media position advanced while `app.hackertube.tv/.PlayerActivity` remained the foreground activity.
 - Live regression script verified advancing position, pause, 10-second seek, resume, cinema D-pad behavior, Home stopping playback, no automatic playback on return, and Back to the original native detail dialog.
-- Seven deterministic Node tests exercise the JavaScript adapter with a mocked official API, including ready/background races, no automatic resume, seek bounds and error 153 forwarding. These tests run in CI without contacting YouTube.
+- Eleven deterministic Node tests exercise the JavaScript adapter with a mocked official API, including ready/background races, no automatic resume, seek bounds, subtitle Off/language selection, unsupported modules and error 153 forwarding. Five JVM tests check duration formatting. These tests run in CI without contacting YouTube.
 - The existing 13 catalog/resource tests and catalog D-pad suite remain applicable.
+- Live subtitle checks verified Off initially, selecting German, visible German captions and switching back to Off. [Subtitle picker](screenshots/google-tv-subtitle-picker.png) · [German captions](screenshots/google-tv-subtitles-german.png).
 - [Player screenshot](screenshots/google-tv-player.png) · [Cinema screenshot](screenshots/google-tv-player-cinema.png).
 
 Run:

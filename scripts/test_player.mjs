@@ -13,7 +13,17 @@ function setup(autoStart = true) {
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   const calls = [];
   let config;
+  let currentTrack = {languageCode:'en',languageName:'English'};
+  const tracks = [currentTrack,{languageCode:'de',languageName:'German'}];
+  const captionCalls = [];
   const player = {
+    getOptions: () => ['track','tracklist'],
+    getOption: (module,option) => option === 'tracklist' ? tracks : currentTrack,
+    setOption: (module,option,value) => {
+      captionCalls.push(value);
+      // Like the real embed, getOption('track') can retain the last language when Off.
+      if (value.languageCode) currentTrack = value;
+    },
     getPlayerState: () => player.state,
     getCurrentTime: () => player.time,
     getDuration: () => 100,
@@ -29,7 +39,7 @@ function setup(autoStart = true) {
   context.window = context;
   vm.runInContext(script, context);
   context.onYouTubeIframeAPIReady();
-  return {context, calls, player, config};
+  return {context, calls, player, config, captionCalls};
 }
 
 test('uses official embed with app identity and visible original controls', () => {
@@ -85,6 +95,42 @@ test('pause in background and no automatic resume', () => {
   context.htCommand('background');
   context.htCommand('foreground');
   assert.deepEqual(calls, ['pause']);
+});
+
+test('captions default Off even if YouTube retains a previous English track', () => {
+  const {context,config,captionCalls} = setup(false);
+  config.events.onReady();
+  assert.equal(captionCalls.length,1);
+  assert.equal(Object.keys(captionCalls[0]).length,0);
+  assert.equal(context.htSnapshot().captions.current,'');
+});
+
+test('subtitle picker exposes tracks, selects German and can turn Off again', () => {
+  const {context,config,captionCalls} = setup(false);
+  config.events.onReady();
+  assert.equal(context.htSnapshot().captions.tracks[1].label,'German');
+  context.htSetCaptions(1);
+  assert.equal(captionCalls.at(-1).languageCode,'de');
+  assert.equal(context.htSnapshot().captions.current,'de');
+  context.htSetCaptions(-1);
+  assert.equal(context.htSnapshot().captions.current,'');
+});
+
+test('subtitle selection survives captions module reload and rejects invalid indices', () => {
+  const {context,config,captionCalls} = setup(false);
+  config.events.onReady(); context.htSnapshot(); context.htSetCaptions(1);
+  config.events.onApiChange();
+  assert.equal(captionCalls.at(-1).languageCode,'de');
+  const count=captionCalls.length;
+  for (const index of [-2,2,100,1.5,'1']) context.htSetCaptions(index);
+  assert.equal(captionCalls.length,count);
+});
+
+test('unsupported caption module is reported without claiming Off', () => {
+  const {context,config,player} = setup(false);
+  player.getOptions = () => [];
+  config.events.onReady();
+  assert.equal(context.htSnapshot().captions.supported,false);
 });
 
 test('API errors, autoplay blocking and actual position are exposed', () => {

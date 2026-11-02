@@ -30,6 +30,7 @@ public class MainActivity extends Activity {
     int restoreScroll=0;
     boolean restoreCardFocus=false;
     ScrollView catalogScroll;
+    DurationMetadata durations;
     Button discoverButton, savedButton;
     final LruCache<String,Bitmap> images=new LruCache<String,Bitmap>(16*1024*1024) {
         protected int sizeOf(String key, Bitmap b) { return b.getByteCount(); }
@@ -49,6 +50,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN);
         saved=new HashSet<>(getPreferences(0).getStringSet("saved", Collections.emptySet()));
+        durations=new DurationMetadata(this);
         if(state!=null){topic=state.getString("topic","All topics"); mode=state.getString("mode","Discover"); query=state.getString("query",""); page=state.getInt("page",0);}
         if(state!=null){focusedVideo=state.getString("focusedVideo","");restoreScroll=state.getInt("scroll",0);restoreCardFocus=state.getBoolean("cardFocus",false);}
         ActivityManager am=(ActivityManager)getSystemService(ACTIVITY_SERVICE);
@@ -65,7 +67,7 @@ public class MainActivity extends Activity {
         });
     }
     @Override public void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);b.putString("topic",topic);b.putString("mode",mode);b.putString("query",query);b.putInt("page",page);b.putString("focusedVideo",focusedVideo);b.putInt("scroll",catalogScroll.getScrollY());b.putBoolean("cardFocus",catalogScroll.hasFocus());}
-    @Override public void onDestroy(){imageGeneration++;main.removeCallbacksAndMessages(null);workers.shutdownNow();thumbnails.shutdownNow();images.evictAll();super.onDestroy();}
+    @Override public void onDestroy(){imageGeneration++;main.removeCallbacksAndMessages(null);workers.shutdownNow();thumbnails.shutdownNow();durations.close();images.evictAll();super.onDestroy();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=TRIM_MEMORY_UI_HIDDEN)images.evictAll();else if(level>=TRIM_MEMORY_RUNNING_LOW)images.trimToSize(images.maxSize()/2);}
     // Top-navigation TV pattern: grid -> active tab -> Discover -> system Home. No exit gate.
     @Override public void onBackPressed(){
@@ -89,7 +91,6 @@ public class MainActivity extends Activity {
         TextView brand=text("▶  hacker",27,INK);header.addView(brand);header.addView(text("tube",27,ORANGE));
         TextView tagline=text("   SIGNAL OVER NOISE",12,MUTED);header.addView(tagline,new LinearLayout.LayoutParams(0,-2,1));
         addButton(header,button("About",this::about));root.addView(header);
-        TextView headline=text("Worth coming back to.",24,INK);headline.setPadding(0,dp(8),0,dp(3));if(Build.VERSION.SDK_INT>=28)headline.setAccessibilityHeading(true);root.addView(headline);
         nav=new LinearLayout(this);nav.setPadding(0,dp(16),0,dp(12));root.addView(nav);
         discoverButton=button("Discover",()->{mode="Discover";apply(true);});addButton(nav,discoverButton);
         savedButton=button("Saved",()->{mode="Saved";apply(true);});addButton(nav,savedButton);
@@ -117,20 +118,32 @@ public class MainActivity extends Activity {
         discoverButton.setSelected(mode.equals("Discover"));savedButton.setSelected(mode.equals("Saved"));paintFocus(discoverButton);paintFocus(savedButton);
         count.setText(mode+"  /  "+topic+"  ·  "+filtered.size()+" videos");
         if(filtered.isEmpty()){grid.addView(text(mode.equals("Saved")?"No saved videos match. Save a video from its detail page.":"No matches. Try another search or topic.",20,INK));return;}
+        final int generation=imageGeneration;
+        Map<String,TextView> durationBadges=new HashMap<>();
         int end=Math.min(filtered.size(),(page+1)*PAGE_SIZE);LinearLayout row=null;
         for(int i=page*PAGE_SIZE;i<end;i++){
             if(i%3==0){row=new LinearLayout(this);grid.addView(row);}
             JSONObject v=filtered.get(i);LinearLayout card=column();card.setTag(v.optString("id"));card.setPadding(dp(8),dp(8),dp(8),dp(10));focusable(card);
             card.setContentDescription(v.optString("title")+", by "+v.optString("channel")+", "+v.optInt("recommenders")+" recommenders, "+v.optString("first")+" to "+v.optString("last")+". Open video details");card.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);card.setOnClickListener(w->details(v,card));
             LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);p.setMargins(dp(4),dp(4),dp(4),dp(12));row.addView(card,p);
-            ImageView image=new ImageView(this){@Override protected void onMeasure(int w,int h){int width=MeasureSpec.getSize(w);super.onMeasure(w,MeasureSpec.makeMeasureSpec(width*9/16,MeasureSpec.EXACTLY));}};
-            image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setBackgroundColor(Color.rgb(38,43,53));card.addView(image,new LinearLayout.LayoutParams(-1,-2));thumbnail(v.optString("id"),image);
+            FrameLayout preview=new FrameLayout(this){@Override protected void onMeasure(int w,int h){int width=MeasureSpec.getSize(w);super.onMeasure(w,MeasureSpec.makeMeasureSpec(width*9/16,MeasureSpec.EXACTLY));}};
+            card.addView(preview,new LinearLayout.LayoutParams(-1,-2));
+            ImageView image=new ImageView(this);image.setScaleType(ImageView.ScaleType.FIT_CENTER);image.setBackgroundColor(Color.rgb(38,43,53));preview.addView(image,new FrameLayout.LayoutParams(-1,-1));thumbnail(v.optString("id"),image);
+            TextView badge=text(DurationMetadata.format(durations.get(v.optString("id"))),13,Color.WHITE);badge.setBackgroundColor(0xDD000000);badge.setPadding(dp(5),dp(2),dp(5),dp(2));
+            FrameLayout.LayoutParams badgeLayout=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.RIGHT);badgeLayout.setMargins(dp(4),dp(4),dp(4),dp(4));preview.addView(badge,badgeLayout);durationBadges.put(v.optString("id"),badge);
             TextView title=text(v.optString("title"),16,INK);title.setLines(2);title.setEllipsize(TextUtils.TruncateAt.END);title.setPadding(0,dp(7),0,0);card.addView(title,new LinearLayout.LayoutParams(-1,-2));
             TextView channel=text(v.optString("channel"),14,MUTED);channel.setSingleLine();channel.setEllipsize(TextUtils.TruncateAt.END);card.addView(channel);
             TextView stats=text(v.optInt("recommenders")+" recommenders · "+v.optString("first")+"–"+v.optString("last"),14,ORANGE);stats.setMaxLines(2);card.addView(stats);
             // Expose each card as one descriptive action, not duplicated thumbnail/title nodes.
-            for(int child=0;child<card.getChildCount();child++)card.getChildAt(child).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            for(int child=0;child<card.getChildCount();child++)card.getChildAt(child).setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
         }
+        durations.fetch(new ArrayList<>(durationBadges.keySet()),()->{
+            if(isDestroyed()||generation!=imageGeneration)return;
+            for(Map.Entry<String,TextView> entry:durationBadges.entrySet()){
+                long seconds=durations.get(entry.getKey());String duration=DurationMetadata.format(seconds);entry.getValue().setText(duration);
+                View card=grid.findViewWithTag(entry.getKey());if(card!=null)card.setContentDescription(card.getContentDescription()+". Duration "+(seconds>0?duration:"unavailable"));
+            }
+        });
         if(row!=null)for(int i=0;i<(3-(end-page*PAGE_SIZE)%3)%3;i++)row.addView(new View(this),new LinearLayout.LayoutParams(0,1,1));
         LinearLayout pages=new LinearLayout(this);pages.setGravity(Gravity.CENTER);grid.addView(pages);
         if(page>0)addButton(pages,button("← Previous",()->{page--;render();catalogScroll.scrollTo(0,0);focusVideo("");}));
@@ -148,6 +161,8 @@ public class MainActivity extends Activity {
     void details(JSONObject v,View origin){
         LinearLayout body=column();body.setPadding(dp(24),dp(12),dp(24),dp(20));
         body.addView(text(v.optString("channel")+" · "+v.optInt("recommenders")+" recommenders · "+v.optInt("months")+" distinct months",15,ORANGE));
+        TextView runtime=text("Duration: "+DurationMetadata.format(durations.get(v.optString("id"))),16,INK);body.addView(runtime);
+        durations.fetch(Collections.singletonList(v.optString("id")),()->{if(!isDestroyed()){long seconds=durations.get(v.optString("id"));runtime.setText("Duration: "+(seconds>0?DurationMetadata.format(seconds):"unavailable"));}});
         TextView summary=text(v.optString("summary")+"\n\nWHY HN RECOMMENDS IT\n"+v.optString("why"),18,INK);summary.setPadding(0,dp(16),0,dp(16));body.addView(summary);
         LinearLayout actions=new LinearLayout(this);body.addView(actions);
         addButton(actions,button("▶ Watch",()->watch(v)));
@@ -164,5 +179,5 @@ public class MainActivity extends Activity {
     }
     // TV-WB: never launch a browser. Evidence is native; original links can be read on another device.
     void openUrl(String url){new AlertDialog.Builder(this).setTitle("Read the original on your phone or computer").setMessage("The recommendation is shown in HackerTube. For the original HN discussion, open:\n\n"+url).setPositiveButton("Done",null).show();}
-    void about(){new AlertDialog.Builder(this).setTitle("HackerTube · TV edition").setMessage("A quiet catalog, not an engagement feed.\n\n"+catalog.size()+" videos with at least 3 distinct recommenders in 3 distinct months across 2 or more calendar years. News is excluded. Ranked by the source recommendation score.\n\nData: HackerTube (hackertube.org), export 2026-10-31, and open-index/hacker-news (huggingface.co/datasets/open-index/hacker-news), under Open Data Commons Attribution License v1.0 (opendatacommons.org/licenses/by/1-0/). Derived catalog filtered from that export. HN data is provided by Y Combinator; comments belong to their authors.\n\nLabels and summaries are AI-generated and may be wrong. Evidence is capped at 20 source mentions per video, so this is conservative, not exhaustive. Year spans are calendar years, not necessarily 24 months.\n\nYouTube titles and thumbnails belong to their creators. Not affiliated with Karpathy, YouTube, Google, Hacker News or Y Combinator. Saved videos stay on this device. Thumbnails and embedded playback contact YouTube. The player may use cookies and WebView Media Integrity attestation (app/device metadata). Playback stays in HackerTube; some videos do not permit embedding.").setPositiveButton("Done",null).show();}
+    void about(){new AlertDialog.Builder(this).setTitle("HackerTube · TV edition").setMessage("A quiet catalog, not an engagement feed.\n\n"+catalog.size()+" videos with at least 3 distinct recommenders in 3 distinct months across 2 or more calendar years. News is excluded. Ranked by the source recommendation score.\n\nData: HackerTube (hackertube.org), export 2026-10-31, and open-index/hacker-news (huggingface.co/datasets/open-index/hacker-news), under Open Data Commons Attribution License v1.0 (opendatacommons.org/licenses/by/1-0/). Derived catalog filtered from that export. HN data is provided by Y Combinator; comments belong to their authors.\n\nLabels and summaries are AI-generated and may be wrong. Evidence is capped at 20 source mentions per video, so this is conservative, not exhaustive. Year spans are calendar years, not necessarily 24 months.\n\nYouTube titles and thumbnails belong to their creators. Not affiliated with Karpathy, YouTube, Google, Hacker News or Y Combinator. Saved videos stay on this device. Visible video IDs are sent to hackertube.org for duration metadata, cached locally for up to 30 days. Thumbnails and embedded playback contact YouTube. The player may use cookies and WebView Media Integrity attestation (app/device metadata). Playback stays in HackerTube; some videos do not permit embedding.").setPositiveButton("Done",null).show();}
 }

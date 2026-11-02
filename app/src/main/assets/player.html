@@ -18,15 +18,46 @@ const autoStart = __AUTO_START__;
 const startSeconds = __START_SECONDS__;
 let player;
 let foreground = true;
+let captionChoice = null; // null means Off for each new playback session.
+let captionTracks = [];
+function captionOptions() {
+  try { return player && typeof player.getOptions === 'function' ? player.getOptions('captions') : []; }
+  catch (_) { return []; }
+}
+function applyCaptionChoice() {
+  // Capability-detect exposed module options; never access the cross-origin player's DOM.
+  if (captionOptions().includes('track')) player.setOption('captions', 'track', captionChoice || {});
+}
+function captionSnapshot() {
+  const options = captionOptions();
+  if (!options.includes('track') || !options.includes('tracklist')) return {supported:false,tracks:[]};
+  try {
+    captionTracks = player.getOption('captions', 'tracklist') || [];
+    const current = player.getOption('captions', 'track') || {};
+    // YouTube retains the last track object even after captions are disabled.
+    // Report our applied selection rather than mislabeling Off as the last language.
+    return {supported:true,current:captionChoice ? captionChoice.languageCode : '',tracks:captionTracks.map((track,index) => {
+      let label = track.languageName || track.displayName || track.name || track.languageCode;
+      if (typeof label !== 'string') label = label.simpleText || track.languageCode;
+      return {index,code:track.languageCode,label:label + (track.kind === 'asr' ? ' (auto-generated)' : '')};
+    })};
+  } catch (_) { return {supported:false,tracks:[]}; }
+}
+window.htSetCaptions = function(index) {
+  if (!Number.isInteger(index) || index < -1 || index >= captionTracks.length) return;
+  captionChoice = index === -1 ? null : captionTracks[index];
+  applyCaptionChoice();
+};
 window.htStatus = {ready:false,state:-1,error:0,blocked:false,time:0,duration:0};
 window.onYouTubeIframeAPIReady = function () {
   player = new YT.Player('player', {
     width:'100%', height:'100%', videoId,
     host:'https://www.youtube-nocookie.com',
-    playerVars:{origin:appOrigin,autoplay:0,controls:1,playsinline:1,fs:0,rel:0,start:startSeconds},
+    playerVars:{origin:appOrigin,autoplay:0,controls:1,playsinline:1,fs:0,rel:0,start:startSeconds,cc_load_policy:1},
     events:{
       onReady:function () {
         htStatus.ready = true;
+        applyCaptionChoice();
         // The Activity is entered only after an explicit Watch selection.
         if (foreground && autoStart) player.playVideo();
       },
@@ -37,6 +68,7 @@ window.onYouTubeIframeAPIReady = function () {
           if (!foreground) player.pauseVideo();
         }
       },
+      onApiChange:function () { applyCaptionChoice(); },
       onError:function (event) { htStatus.error = event.data; },
       onAutoplayBlocked:function () { htStatus.blocked = true; }
     }
@@ -59,6 +91,7 @@ window.htSnapshot = function () {
   if (player && htStatus.ready) {
     htStatus.time = player.getCurrentTime() || 0;
     htStatus.duration = player.getDuration() || 0;
+    htStatus.captions = captionSnapshot();
   }
   return htStatus;
 };
