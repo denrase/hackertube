@@ -1,6 +1,16 @@
 # HackerTube for Google TV
 
-A native, remote-friendly Android TV catalog of videos repeatedly recommended on Hacker News. Private personal project inspired by [Karpathy's post](https://x.com/karpathy/status/2116957135661945283).
+> [!WARNING]
+> **This was AI-slopped together for my own TV. It is not a maintained product.**
+>
+> Published as-is because someone else might find it useful. Expect bugs, rough edges, brittle integrations, and things that stop working. I am **not committing to support, fixes, compatibility updates, security updates, or reviewing issues and pull requests for other users**.
+>
+> **Fork it and make it yours.** The original application code is MIT-licensed: use, modify, redistribute, or commercialize it subject to that license. The bundled dataset and third-party content have separate terms—see [NOTICE.md](NOTICE.md). You are responsible for reviewing those terms and the YouTube/platform requirements before using or distributing your fork. This disclaimer is not a claim of policy compliance.
+
+An unofficial, remote-friendly Android TV catalog of videos repeatedly recommended on Hacker News. Personal experiment inspired by [Karpathy's post](https://x.com/karpathy/status/2116957135661945283).
+
+## License
+Original application code: [MIT](LICENSE). Bundled HackerTube-derived data: **ODC-By 1.0**, with attribution and details in [NOTICE.md](NOTICE.md). Third-party code, trademarks, videos, thumbnails, and other imagery are not relicensed by this project's MIT license.
 
 ## Included
 - 2,074 curated videos, bundled locally; no backend of your own or API key required.

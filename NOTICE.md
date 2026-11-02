@@ -12,4 +12,6 @@ Hacker News data is provided by Y Combinator. Comments remain the work of their 
 
 Changes: retained only actual recommendation labels with at least three distinct authors, three months and two calendar years; excluded news; projected fields for a TV catalog and sorted by source score. Summaries and stance labels originate from the source's AI pipeline and are not independently verified.
 
-Original source documentation is preserved in docs/DATA.md. Dataset licensing does not imply a license grant for this repository's original application code.
+Original source documentation is preserved in docs/DATA.md. The bundled derived dataset (app/src/main/assets/catalog.json) and upstream data documentation retain their upstream terms; they are not relicensed under MIT.
+
+The repository's original application code and original project documentation are licensed under the MIT License in LICENSE. Third-party components retain their own licenses, including the Apache-2.0-licensed Gradle wrapper. Video imagery visible in screenshots, thumbnails, video content, names and trademarks remain subject to their respective owners' rights; the MIT license does not grant rights to that third-party material.
